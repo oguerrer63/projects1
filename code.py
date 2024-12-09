@@ -17,6 +17,7 @@ from digitalio import DigitalInOut, Direction, Pull
 from adafruit_matrixportal.network import Network
 from adafruit_matrixportal.matrix import Matrix
 import openweather_graphics  # pylint: disable=wrong-import-position
+import sprite_graphics #scrolls through sprite animation
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -70,7 +71,7 @@ DATA_LOCATION = []
 SCROLL_HOLD_TIME = 0  # set this to hold each line before finishing scroll
 
 # --- Display setup ---
-matrix = Matrix()
+matrix = Matrix(rotation=180)
 network = Network(status_neopixel=board.NEOPIXEL, debug=True)
 if UNITS in ("imperial", "metric"):
     gfx = openweather_graphics.OpenWeather_Graphics(
@@ -80,13 +81,36 @@ if UNITS in ("imperial", "metric"):
 print("gfx loaded")
 localtime_refresh = None
 weather_refresh = None
+hour = None
+min = None
+active = 0
+
 while True:
+    #Keep screen dark if between hours 10pm and 6am
+    if hour <= 6 or hour >= 22:
+        #Make sure things are shutdown
+        active = 0 
+        #Make sure things are shutdown
+        min = time.localtime().tm_min #check how many minutes left in our
+        delay = 60 - min
+        time.sleep(delay) #delay to see if next hour 
+        continue
+    
+    #Measure the motion sensor, baseline ~300, above 3000 means tripped  
+    motion = AnalogRead(board.A0)
+    
+    #Some time after 6
+    if hour >= 6 and motion < 1000:
+        alert = 0
+        
+    
     # only query the online time once per hour (and on first run)
     if (not localtime_refresh) or (time.monotonic() - localtime_refresh) > 3600:
         try:
             print("Getting time from internet!")
             network.get_local_time()
             localtime_refresh = time.monotonic()
+            hour = time.localtime().tm_hour
         except RuntimeError as e:
             print("Some error occured, retrying! -", e)
             continue
