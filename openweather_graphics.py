@@ -9,10 +9,10 @@ from adafruit_bitmap_font import bitmap_font
 
 TEMP_COLOR = 0xFFA800
 MAIN_COLOR = 0x9000FF  # weather condition
-DESCRIPTION_COLOR = 0x00D3FF
-CITY_COLOR = 0x9000FF
-HUMIDITY_COLOR = 0x0000AA
-WIND_COLOR = 0xCCCCCC
+DESCRIPTION_COLOR = 0xCCCCCC #[Blue: 0x00D3FF]
+CITY_COLOR = 0x9000FF #[Yellow: 0x9000FF]
+HUMIDITY_COLOR = 0x0000AA #[Green: 0x0000AA]
+WIND_COLOR = 0xCCCCCC #[White: 0xCCCCCC]
 
 cwd = ("/" + __file__).rsplit("/", 1)[
     0
@@ -47,15 +47,9 @@ class OpenWeather_Graphics(displayio.Group):
         self.display = display
 
         splash = displayio.Group()
-        # CircuitPython 6 & 7 compatible
-        background = displayio.OnDiskBitmap(open("loading.bmp", "rb"))
-        bg_sprite = displayio.TileGrid(
-            background,
-            pixel_shader=getattr(background, 'pixel_shader', displayio.ColorConverter()),
-        )
-        # # CircuitPython 7+ compatible
-        # background = displayio.OnDiskBitmap("loading.bmp")
-        # bg_sprite = displayio.TileGrid(background, pixel_shader=background.pixel_shader)
+        # CircuitPython 7+ compatible
+        background = displayio.OnDiskBitmap("loading.bmp")
+        bg_sprite = displayio.TileGrid(background, pixel_shader=background.pixel_shader)
 
         splash.append(bg_sprite)
         display.root_group = splash
@@ -73,22 +67,15 @@ class OpenWeather_Graphics(displayio.Group):
         self._current_label = None
 
         # Load the icon sprite sheet
-        # CircuitPython 6 & 7 compatible
-        icons = displayio.OnDiskBitmap(open(icon_spritesheet, "rb"))
+
+        # CircuitPython 7+ compatible
+        icons = displayio.OnDiskBitmap(icon_spritesheet)
         self._icon_sprite = displayio.TileGrid(
             icons,
-            pixel_shader=getattr(icons, 'pixel_shader', displayio.ColorConverter()),
+            pixel_shader=icons.pixel_shader,
             tile_width=icon_width,
             tile_height=icon_height
         )
-        # # CircuitPython 7+ compatible
-        # icons = displayio.OnDiskBitmap(icon_spritesheet)
-        # self._icon_sprite = displayio.TileGrid(
-        #     icons,
-        #     pixel_shader=icons.pixel_shader,
-        #     tile_width=icon_width,
-        #     tile_height=icon_height
-        # )
 
         self.set_icon(None)
         self._scrolling_texts = []
@@ -126,10 +113,10 @@ class OpenWeather_Graphics(displayio.Group):
 
         city_name = weather["name"] + ", " + weather["sys"]["country"]
         print(city_name)
-        if not self.city_text:
-            self.city_text = Label(self.small_font, text=city_name)
-            self.city_text.color = CITY_COLOR
-            self._scrolling_texts.append(self.city_text)
+        #if not self.city_text:
+        #    self.city_text = Label(self.small_font, text=city_name)
+        #    self.city_text.color = CITY_COLOR
+        #    self._scrolling_texts.append(self.city_text)
 
         temperature = weather["main"]["temp"]
         print(temperature)
@@ -146,14 +133,14 @@ class OpenWeather_Graphics(displayio.Group):
 
         humidity = weather["main"]["humidity"]
         print(humidity)
-        self.humidity_text.text = "%d%% humidity" % humidity
+        #self.humidity_text.text = "%d%% humidity" % humidity
 
         wind = weather["wind"]["speed"]
         print(wind)
-        if self.meters_speed:
-            self.wind_text.text = "%d m/s" % wind
-        else:
-            self.wind_text.text = "%d mph" % wind
+        #if self.meters_speed:
+        #    self.wind_text.text = "%d m/s" % wind
+        #else:
+        #    self.wind_text.text = "%d mph" % wind
 
         self.display.root_group = self.root_group
 
