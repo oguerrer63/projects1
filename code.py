@@ -87,7 +87,7 @@ active = 0
 
 while True:
     #Keep screen dark if between hours 10pm and 6am
-    if hour <= 6 or hour >= 22:
+    if hour is None or (hour <= 6 or hour >= 22):
         #Make sure things are shutdown
         active = 0 
         #Make sure things are shutdown
@@ -120,12 +120,16 @@ while True:
         try:
             value = network.fetch_data(DATA_SOURCE, json_path=(DATA_LOCATION,))
             print("Response is", value)
-            gfx.display_weather(value)
+            if hour > 6 and hour < 22:
+                gfx.display_weather(value)
             weather_refresh = time.monotonic()
         except RuntimeError as e:
             print("Some error occured, retrying! -", e)
             continue
 
-    gfx.scroll_next_label()
+    if hour > 6 and hour <22:
+        gfx.scroll_next_label()
+    else
+        matrix.
     # Pause between labels
     time.sleep(SCROLL_HOLD_TIME)
