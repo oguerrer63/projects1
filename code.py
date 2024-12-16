@@ -13,6 +13,7 @@ if you can find something that spits out JSON data, we can display it
 import time
 import board
 import microcontroller
+import displayio
 from digitalio import DigitalInOut, Direction, Pull
 from adafruit_matrixportal.network import Network
 from adafruit_matrixportal.matrix import Matrix
@@ -26,6 +27,11 @@ except ImportError:
     print("WiFi secrets are kept in secrets.py, please add them there!")
     raise
 
+# --- Display Setup ---
+matrix = Matrix(rotation=180)
+network = Network(status_neopixel=board.NEOPIXEL, debug=True)
+
+# --- Weather Unit Selection ---
 if hasattr(board, "D12"):
     jumper = DigitalInOut(board.D12)
     jumper.direction = Direction.INPUT
@@ -55,6 +61,7 @@ else:
     UNITS = "imperial"
     print("Jumper set to imperial")
 
+# --- Weather Location Setup ---
 # Use cityname, country code where countrycode is ISO3166 format.
 # E.g. "New York, US" or "London, GB"
 LOCATION = "Los Angeles, US"
@@ -70,39 +77,39 @@ DATA_SOURCE += "&appid=" + secrets["openweather_token"]
 DATA_LOCATION = []
 SCROLL_HOLD_TIME = 0  # set this to hold each line before finishing scroll
 
-# --- Display setup ---
-matrix = Matrix(rotation=180)
-network = Network(status_neopixel=board.NEOPIXEL, debug=True)
+# --- Weather Unit Setup ---
 if UNITS in ("imperial", "metric"):
     gfx = openweather_graphics.OpenWeather_Graphics(
         matrix.display, am_pm=True, units=UNITS
     )
-
 print("gfx loaded")
+
+# --- Sprite Image setup ---
+current_image = None
+current_frame = 0
+frame_count = 0
+frame_duration = 0.1 #100mS
+
+# --- Parameter Initialization --- 
 localtime_refresh = None
 weather_refresh = None
+
+#Display and Motion checks
 hour = None
 min = None
 active = 0
 
 while True:
     #Keep screen dark if between hours 10pm and 6am
-    if hour is None or (hour <= 6 or hour >= 22):
+    if hour <= 6 or hour >= 22:
         #Make sure things are shutdown
-        active = 0 
-        #Make sure things are shutdown
-        min = time.localtime().tm_min #check how many minutes left in our
+        matrix.display.root_group = None 
+        #check how many minutes left in hour
+        min = time.localtime().tm_min
         delay = 60 - min
-        time.sleep(delay) #delay to see if next hour 
+        time.sleep(delay) #delay to see if next hour
+        hour = time.localtime().tm_hour
         continue
-    
-    #Measure the motion sensor, baseline ~300, above 3000 means tripped  
-    motion = AnalogRead(board.A0)
-    
-    #Some time after 6
-    if hour >= 6 and motion < 1000:
-        alert = 0
-        
     
     # only query the online time once per hour (and on first run)
     if (not localtime_refresh) or (time.monotonic() - localtime_refresh) > 3600:
@@ -114,22 +121,31 @@ while True:
         except RuntimeError as e:
             print("Some error occured, retrying! -", e)
             continue
-
+    
     # only query the weather every 10 minutes (and on first run)
     if (not weather_refresh) or (time.monotonic() - weather_refresh) > 600:
         try:
             value = network.fetch_data(DATA_SOURCE, json_path=(DATA_LOCATION,))
             print("Response is", value)
-            if hour > 6 and hour < 22:
-                gfx.display_weather(value)
+            gfx.display_weather(value)
             weather_refresh = time.monotonic()
         except RuntimeError as e:
             print("Some error occured, retrying! -", e)
             continue
+    
+    #Measure the motion sensor, baseline ~300, above 3000 means tripped  
+    motion = AnalogRead(board.A0)
+    
+    #Some time after 6
+    if hour < 7 and motion < 1000:
+        continue
 
+    ### FIGURE OUT HOW TO SWITCH BETWEEN DISPLAY TYPES AFTER TRIGGER
     if hour > 6 and hour <22:
+        gfx.display_weather(value)
         gfx.scroll_next_label()
+        # Pause between labels
+        time.sleep(SCROLL_HOLD_TIME)
     else
-        matrix.
-    # Pause between labels
-    time.sleep(SCROLL_HOLD_TIME)
+        #Keep screen off
+        matrix.display.root_group = None
