@@ -84,6 +84,9 @@ if UNITS in ("imperial", "metric"):
     )
 print("gfx loaded")
 
+# ---Sprite Load --- 
+sprt = sprite_graphics.sprite_graphics(matrix.display)
+
 # --- Sprite Image setup ---
 current_image = None
 current_frame = 0
@@ -93,11 +96,12 @@ frame_duration = 0.1 #100mS
 # --- Parameter Initialization --- 
 localtime_refresh = None
 weather_refresh = None
+weather_loop = None
 
 #Display and Motion checks
 hour = None
 min = None
-active = 0
+active = False
 
 while True:
     #Keep screen dark if between hours 10pm and 6am
@@ -127,7 +131,6 @@ while True:
         try:
             value = network.fetch_data(DATA_SOURCE, json_path=(DATA_LOCATION,))
             print("Response is", value)
-            gfx.display_weather(value)
             weather_refresh = time.monotonic()
         except RuntimeError as e:
             print("Some error occured, retrying! -", e)
@@ -139,13 +142,23 @@ while True:
     #Some time after 6
     if hour < 7 and motion < 1000:
         continue
-
+    
+    if motion > 1000 and active is False:
+        active = True
+        weather_loop = time.monotonic()
+        current_frame = 0
+    elif time.monotonic - weather_loop > 60:
+        active = False
+        
     ### FIGURE OUT HOW TO SWITCH BETWEEN DISPLAY TYPES AFTER TRIGGER
-    if hour > 6 and hour <22:
+    if active is True and hour <22:
         gfx.display_weather(value)
         gfx.scroll_next_label()
         # Pause between labels
         time.sleep(SCROLL_HOLD_TIME)
-    else
+    elif active is False and hour <22:
+        sprt.display(current_frame)
+        current_frame = current_frame + 1
+    else:
         #Keep screen off
         matrix.display.root_group = None
