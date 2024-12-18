@@ -18,7 +18,6 @@ from digitalio import DigitalInOut, Direction, Pull
 from adafruit_matrixportal.network import Network
 from adafruit_matrixportal.matrix import Matrix
 import openweather_graphics  # pylint: disable=wrong-import-position
-import sprite_graphics #scrolls through sprite animation
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -84,16 +83,29 @@ if UNITS in ("imperial", "metric"):
     )
 print("gfx loaded")
 
-# ---Sprite Load --- 
-sprt = sprite_graphics.sprite_graphics(matrix.display)
 
-# --- Sprite Image setup ---
+# --- Sprite Image Parameters ---
+SPRITE_FOLDER = "/bmps"
+sprite_sheet = "santa.bmp"  #Display image file in folder
 current_image = None
 current_frame = 0
 frame_count = 0
 frame_duration = 0.1 #100mS
 
-# --- Parameter Initialization --- 
+# --- Sprite Image setup ---
+sprite_group = displayio.Group()
+sprite_file = SPRITE_FOLDER + "/" + sprite_sheet
+bitmap = displayio.OnDiskBitmap(sprite_file)
+sprite = displayio.TileGrid(
+        bitmap,
+        pixel_shader=bitmap.pixel_shader,
+        tile_width=bitmap.width,
+        tile_height=matrix.display.height,
+    )
+frame_count = int(bitmap.height / matrix.display.height)
+sprite_group.append(sprite)
+
+# --- Timer Parameter Initialization --- 
 localtime_refresh = None
 weather_refresh = None
 weather_loop = None
@@ -105,12 +117,12 @@ active = False
 
 while True:
     #Keep screen dark if between hours 10pm and 6am
-    if hour <= 6 or hour >= 22:
-        #Make sure things are shutdown
+    if hour < 6 or hour >= 22:
+        #Make sure display is shutdown
         matrix.display.root_group = None 
         #check how many minutes left in hour
         min = time.localtime().tm_min
-        delay = 60 - min
+        delay = 60 - min + 1
         time.sleep(delay) #delay to see if next hour
         hour = time.localtime().tm_hour
         continue
@@ -139,26 +151,37 @@ while True:
     #Measure the motion sensor, baseline ~300, above 3000 means tripped  
     motion = AnalogRead(board.A0)
     
-    #Some time after 6
+    #Some time after 6, register trigger to display weather
     if hour < 7 and motion < 1000:
+        matrix.display.root_group = None
         continue
-    
+    elif hour < 7 and motion > 1000:
+        active = True
+        weather_loop = time.monotonic()
+        current_frame = 0
+
+    #If its after 7am, play the sprites on loop
+    if active is False and hour > 7:
+        matrix.display.root_group = sprite_group
+        current_frame = current_frame + 1
+        if current_frame >= frame_count:
+            current_frame = 0
+        sprite_group[0][0] = current_frame
+
+    #If after 7am and motion trigger tripped, select to show weather for set time (in secs) 
     if motion > 1000 and active is False:
         active = True
         weather_loop = time.monotonic()
         current_frame = 0
-    elif time.monotonic - weather_loop > 60:
+    elif time.monotonic - weather_loop > 30:
         active = False
-        
-    ### FIGURE OUT HOW TO SWITCH BETWEEN DISPLAY TYPES AFTER TRIGGER
-    if active is True and hour <22:
+    else:
+        active = True
+
+    #Display weather if selected and before 11pm
+    if active is True and hour < 22: 
         gfx.display_weather(value)
         gfx.scroll_next_label()
         # Pause between labels
         time.sleep(SCROLL_HOLD_TIME)
-    elif active is False and hour <22:
-        sprt.display(current_frame)
-        current_frame = current_frame + 1
-    else:
-        #Keep screen off
-        matrix.display.root_group = None
+
