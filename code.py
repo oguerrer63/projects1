@@ -15,6 +15,7 @@ import board
 import microcontroller
 import displayio
 from digitalio import DigitalInOut, Direction, Pull
+import analogio
 from adafruit_matrixportal.network import Network
 from adafruit_matrixportal.matrix import Matrix
 import openweather_graphics  # pylint: disable=wrong-import-position
@@ -114,10 +115,11 @@ weather_loop = None
 hour = None
 min = None
 active = False
+pin = analogio.AnalogIn(board.A0)
 
 while True:
     #Keep screen dark if between hours 10pm and 6am
-    if hour < 6 or hour >= 22:
+    if (hour) and (hour < 6 or hour >= 22):
         #Make sure display is shutdown
         matrix.display.root_group = None 
         #check how many minutes left in hour
@@ -149,7 +151,8 @@ while True:
             continue
     
     #Measure the motion sensor, baseline ~300, above 3000 means tripped  
-    motion = AnalogRead(board.A0)
+    motion = pin.value
+    #motion = 0
     
     #Some time after 6, register trigger to display weather
     if hour < 7 and motion < 1000:
@@ -167,16 +170,22 @@ while True:
         if current_frame >= frame_count:
             current_frame = 0
         sprite_group[0][0] = current_frame
+        time.sleep(frame_duration)
 
     #If after 7am and motion trigger tripped, select to show weather for set time (in secs) 
     if motion > 1000 and active is False:
         active = True
         weather_loop = time.monotonic()
         current_frame = 0
-    elif time.monotonic - weather_loop > 30:
+        print("inside first")
+        print(weather_loop)
+    elif (weather_loop) and (time.monotonic() - weather_loop > 30): #Why is this being skipped!?!?!?!?
         active = False
-    else:
-        active = True
+        print("inside weather loop")
+    elif (weather_loop):
+        active = False
+        print("inside else")
+
 
     #Display weather if selected and before 11pm
     if active is True and hour < 22: 
@@ -184,4 +193,3 @@ while True:
         gfx.scroll_next_label()
         # Pause between labels
         time.sleep(SCROLL_HOLD_TIME)
-
