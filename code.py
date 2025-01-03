@@ -12,13 +12,11 @@ if you can find something that spits out JSON data, we can display it
 """
 import time
 import board
-import microcontroller
 import displayio
-from digitalio import DigitalInOut, Direction, Pull
 import analogio
 from adafruit_matrixportal.network import Network
 from adafruit_matrixportal.matrix import Matrix
-import openweather_graphics  # pylint: disable=wrong-import-position
+import openweather_graphics 
 
 # Get wifi details and more from a secrets.py file
 try:
@@ -32,34 +30,8 @@ matrix = Matrix(rotation=180)
 network = Network(status_neopixel=board.NEOPIXEL, debug=True)
 
 # --- Weather Unit Selection ---
-if hasattr(board, "D12"):
-    jumper = DigitalInOut(board.D12)
-    jumper.direction = Direction.INPUT
-    jumper.pull = Pull.UP
-    is_metric = jumper.value
-elif hasattr(board, "BUTTON_DOWN") and hasattr(board, "BUTTON_UP"):
-    button_down = DigitalInOut(board.BUTTON_DOWN)
-    button_down.switch_to_input(pull=Pull.UP)
-
-    button_up = DigitalInOut(board.BUTTON_UP)
-    button_up.switch_to_input(pull=Pull.UP)
-    if not button_down.value:
-        print("Down Button Pressed")
-        microcontroller.nvm[0] = 1
-    elif not button_up.value:
-        print("Up Button Pressed")
-        microcontroller.nvm[0] = 0
-    print(microcontroller.nvm[0])
-    is_metric = microcontroller.nvm[0]
-else:
-    is_metric = False
-
-if is_metric:
-    UNITS = "metric"  # can pick 'imperial' or 'metric' as part of URL query
-    print("Jumper set to metric")
-else:
-    UNITS = "imperial"
-    print("Jumper set to imperial")
+UNITS = "imperial"
+print("Jumper set to imperial")
 
 # --- Weather Location Setup ---
 # Use cityname, country code where countrycode is ISO3166 format.
@@ -75,7 +47,8 @@ DATA_SOURCE += "&appid=" + secrets["openweather_token"]
 # it goes in your secrets.py file on a line such as:
 # 'openweather_token' : 'your_big_humongous_gigantor_token',
 DATA_LOCATION = []
-SCROLL_HOLD_TIME = 0  # set this to hold each line before finishing scroll
+
+SCROLL_HOLD_TIME = 2  # 2 sec hold of each line before finishing scroll
 
 # --- Weather Unit Setup ---
 if UNITS in ("imperial", "metric"):
@@ -91,7 +64,7 @@ sprite_sheet = "santa.bmp"  #Display image file in folder
 current_image = None
 current_frame = 0
 frame_count = 0
-frame_duration = 0.1 #100mS
+frame_duration = 0.2 #200mS
 
 # --- Sprite Image setup ---
 sprite_group = displayio.Group()
@@ -109,11 +82,12 @@ sprite_group.append(sprite)
 # --- Timer Parameter Initialization --- 
 localtime_refresh = None
 weather_refresh = None
-weather_loop = None
 
 #Display and Motion checks
+day = None    # 6 = Sun, 0 = Mon
 hour = None
 min = None
+midday = False
 active = False
 pin = analogio.AnalogIn(board.A0)
 
@@ -127,7 +101,30 @@ while True:
         delay = 60 - min + 1
         time.sleep(delay) #delay to see if next hour
         hour = time.localtime().tm_hour
+        day = time. localtime().tm_wday
         continue
+
+    #Keep screen dark if weekend and before 10am
+    if day and day > 4:
+        if (hour) and (hour < 10):
+        #Make sure display is shutdown
+        matrix.display.root_group = None 
+        #check how many minutes left in hour
+        min = time.localtime().tm_min
+        delay = 60 - min + 1
+        time.sleep(delay) #delay to see if next hour
+        hour = time.localtime().tm_hour
+        day = time. localtime().tm_wday
+        continue
+    
+    #Chekc if midday 
+    if (hour) and (hour > 12 and hour < 5):
+        #Make sure display is shutdown
+        matrix.display.root_group = None 
+        midday = True
+        hour = time.localtime().tm_hour
+    else:
+        midday = False
     
     # only query the online time once per hour (and on first run)
     if (not localtime_refresh) or (time.monotonic() - localtime_refresh) > 3600:
@@ -152,7 +149,6 @@ while True:
     
     #Measure the motion sensor, baseline ~300, above 3000 means tripped  
     motion = pin.value
-    #motion = 0
     
     #Some time after 6, register trigger to display weather
     if hour < 7 and motion < 1000:
@@ -160,11 +156,10 @@ while True:
         continue
     elif hour < 7 and motion > 1000:
         active = True
-        weather_loop = time.monotonic()
         current_frame = 0
 
     #If its after 7am, play the sprites on loop
-    if active is False and hour > 7:
+    if active is False and hour > 7 and midday = False:
         matrix.display.root_group = sprite_group
         current_frame = current_frame + 1
         if current_frame >= frame_count:
@@ -175,16 +170,7 @@ while True:
     #If after 7am and motion trigger tripped, select to show weather for set time (in secs) 
     if motion > 1000 and active is False:
         active = True
-        weather_loop = time.monotonic()
         current_frame = 0
-        print("inside first")
-        print(weather_loop)
-    elif (weather_loop) and (time.monotonic() - weather_loop > 30): #Why is this being skipped!?!?!?!?
-        active = False
-        print("inside weather loop")
-    elif (weather_loop):
-        active = False
-        print("inside else")
 
 
     #Display weather if selected and before 11pm
@@ -192,4 +178,9 @@ while True:
         gfx.display_weather(value)
         gfx.scroll_next_label()
         # Pause between labels
-        time.sleep(SCROLL_HOLD_TIME)
+        time.sleep(SCROLL_HOLD_TIME)    #scroll label
+        gfx.scroll_next_label()
+        # Pause between labels
+        time.sleep(SCROLL_HOLD_TIME)    #scroll label second time
+        active = False
+        hour = time.localtime().tm_hour    #check hour to see if after 10pm
